@@ -13,12 +13,13 @@ const ROOTS_CACHE = new Map();
 const STEMMED_CACHE = new Map();
 const JS_TASKS = 'javascript-tasks-';
 const VERSTKA_TASKS = 'verstka-tasks-';
+const TASK_COUNT = 1; // с 10 долго :(
 
 function downloadTaskReadmes() {
-    var tasks = "";
+    var tasks = [];
     for (var i = 1; i <= TASK_COUNT; i++) {
-        tasks += ' ' + getReadme(JS_TASKS, i);
-        tasks += ' ' + getReadme(VERSTKA_TASKS, i);
+        tasks.push(getReadme(JS_TASKS, i));
+        tasks.push(getReadme(VERSTKA_TASKS, i));
     }
     return tasks;
 }
@@ -28,7 +29,7 @@ function getReadme(courseType, taskIndex) {
         protocol: 'https:',
         host: GITHUB,
         pathname: '/repos/urfu-2015/' + courseType + taskIndex + '/readme',
-        query: {'?access_token': KEY}
+        query: {'access_token': KEY}
     });
     var options = {
         headers: {
@@ -44,10 +45,13 @@ function getReadme(courseType, taskIndex) {
 function getWordsByRoot() {
     var tasks = downloadTaskReadmes();
     return tasks.reduce((roots, taskText) => {
-        getWordsFromText(taskText).forEach(word => {
-            var root = getWordRoot(word);
-            updateRoots(roots, root, word);
-        });
+        getWordsFromText(taskText)
+            .forEach(word => {
+                var root = getWordRoot(word);
+                console.log(`Root: ${root} Word ${word}`);
+                updateRoots(roots, root, word);
+            });
+        return roots;
     }, new Map());
 }
 
@@ -61,7 +65,7 @@ function updateRoots(roots, root, word) {
 
 function fillWordsByRootAsync(roots) {
     var tasks = downloadTaskReadmes();
-    var words = getWordsFromText(tasks);
+    var words = getWordsFromText(tasks.join(' '));
     console.log("Total words count: " + words.length);
     return Promise.all(words.map(w => fillRootsAsync(w, roots)));
 }
@@ -94,6 +98,9 @@ function fillRootsAsync(word, roots, host) {
 
 function getWordRoot(word, host) {
     host = host || helpers.MORPHEME_ONLINE;
+    if (ROOTS_CACHE.has(word)) {
+        return ROOTS_CACHE.get(word);
+    }
     var rootRequestUrl = helpers.urlBuilders[host](word);
     var res = syncRequest('GET', encodeURI(rootRequestUrl));
     if (res.statusCode === 404) {
@@ -114,7 +121,6 @@ function getWordsFromText(text) {
         .filter(item => item !== '')
         .filter(item => !BLACKLIST.has(item));
 }
-
 function getMostOccurringElement(array) {
     return _
         .chain(array)
@@ -124,17 +130,20 @@ function getMostOccurringElement(array) {
         .value();
 }
 function count(word) {
+    var sameWords = getWordsByRoot().get(getWordRoot(word));
     return _
-        .chain(getWordsByRoot().get(getWordRoot(word)))
+        .chain(sameWords)
         .countBy(curWord => curWord === word)
         .value()['true'];
 }
 function top(n) {
-    _
-        .chain(list(getWordsByRoot().values()))
+    var rootToWords = list(getWordsByRoot().entries());
+    return _
+        .chain(rootToWords)
         .orderBy('[1].length', 'desc')
         .take(n)
-        .map(pair => [pair[1][0], pair[1].length])
+        // [root, [array of words with this root]
+        .map(pair => pair[1][0] + ": " + pair[1].length)
         .value();
 }
 function countAsync(word, cb) {
@@ -154,13 +163,16 @@ function topAsync(n, cb) {
             .chain(list(roots.entries()))
             .orderBy('[1].length', 'desc')
             .take(n)
+            // [root, [array of words with this root]
             .map(pair => pair[1][0] + ": " + pair[1].length)
             .value());
         console.log(new Date());
     })
 }
-module.exports.top = topAsync;
-module.exports.count = countAsync;
+module.exports.topAsync = topAsync;
+module.exports.top = top;
+module.exports.countAsync = countAsync;
+module.exports.count = count;
 
 function list(iterator) {
     var res = [];
@@ -174,13 +186,3 @@ function list(iterator) {
     return res;
 }
 
-const TASK_COUNT = 1; // с 10 долго :(
-console.log(new Date());
-var callbackForTopAsync = data => data.forEach(d => console.log(d));
-var callbackForCountAsync = ans => console.log(ans);
-topAsync(10, callbackForTopAsync);
-//countAsync("kek", callbackForCountAsync);
-//countAsync("пользователь", ans => console.log(ans));
-
-//countAsync("скрипт", callbackForCountAsync);
-//countAsync("задание", callbackForCountAsync);
