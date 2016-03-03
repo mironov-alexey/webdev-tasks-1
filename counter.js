@@ -142,7 +142,7 @@ function top(n) {
         .chain(rootToWords)
         .orderBy('[1].length', 'desc')
         .take(n)
-        // [root, [array of words with this root]
+        // [root, [array of words with this root]]
         .map(pair => pair[1][0] + ": " + pair[1].length)
         .value();
 }
@@ -163,7 +163,7 @@ function topAsync(n, cb) {
             .chain(list(roots.entries()))
             .orderBy('[1].length', 'desc')
             .take(n)
-            // [root, [array of words with this root]
+            // [root, [array of words with this root]]
             .map(pair => pair[1][0] + ": " + pair[1].length)
             .value());
         console.log(new Date());
